@@ -1,20 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digit-flow</title>
+  <style>
+    body{
+      background:#0b1020;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding:20px;
+    }
+    h1{color:#00e5ff;}
+    #price{
+      font-size:30px;
+      color:#00ff99;
+      margin:20px 0;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:10px;
+      max-width:500px;
+      margin:auto;
+    }
+    .box{
+      background:#1a2342;
+      padding:15px;
+      border-radius:10px;
+    }
+    .box b{
+      display:block;
+      font-size:22px;
+      color:#00e5ff;
+      margin-top:5px;
+    }
+    #history{
+      margin-top:20px;
+      word-break:break-word;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Digit-flow Live</h1>
+<div id="price">Connecting...</div>
+
+<div class="grid" id="digits"></div>
+
+<div id="history">Waiting for ticks...</div>
+
+<script>
+const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+
+let historyDigits = [];
+let counts = Array(10).fill(0);
+
+function draw(){
+  const d = document.getElementById('digits');
+  d.innerHTML = '';
+  counts.forEach((c,i)=>{
+    d.innerHTML += `
+      <div class="box">
+        Digit ${i}
+        <b>${c}</b>
+      </div>`;
+  });
+}
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    ticks: 'R_100',
+    subscribe: 1
+  }));
+};
+
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+
+  if(data.tick){
+    const quote = data.tick.quote.toString();
+
+    document.getElementById('price').innerText = quote;
+
+    const digit = parseInt(quote.slice(-1));
+
+    historyDigits.unshift(digit);
+    if(historyDigits.length > 20) historyDigits.pop();
 
     counts = Array(10).fill(0);
-    historyDigits.forEach(d => counts[d]++);
+    historyDigits.forEach(x => counts[x]++);
+
+    draw();
 
     document.getElementById('history').innerHTML =
-      '<b>Last Digits:</b> ' + historyDigits.join(' , ');
-
-    renderCounts();
-    updateSignal();
+      '<b>Last digits:</b> ' + historyDigits.join(' , ');
   }
 };
 
-ws.onerror = () => {
-  document.getElementById('price').innerText = 'Connection error';
-};
-
-renderCounts();
+draw();
 </script>
 
 </body>
