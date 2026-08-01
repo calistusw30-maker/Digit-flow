@@ -52,7 +52,7 @@
 <div id="history">Waiting for ticks...</div>
 
 <script>
-const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=63261');
 
 let historyDigits = [];
 let counts = Array(10).fill(0);
@@ -68,13 +68,22 @@ function draw(){
       </div>`;
   });
 }
-
 ws.onopen = () => {
+  document.getElementById('price').innerText = 'Connected';
   ws.send(JSON.stringify({
     ticks: 'R_100',
     subscribe: 1
   }));
 };
+
+ws.onerror = () => {
+  document.getElementById('price').innerText = 'Connection failed';
+};
+
+ws.onclose = () => {
+  document.getElementById('price').innerText = 'Disconnected';
+};
+
 
 ws.onmessage = (msg) => {
   const data = JSON.parse(msg.data);
