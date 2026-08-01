@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Deriv Digit Flow Live</title>
+<style>
+body{
+  font-family: Arial,sans-serif;
+  background:#0b1020;
+  color:#fff;
+  text-align:center;
+  padding:20px;
+}
+h1{color:#00e5ff;}
+#price{
+  font-size:32px;
+  margin:15px 0;
+  color:#00ff99;
+}
+.digits{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  max-width:500px;
+  margin:20px auto;
+}
+.box{
+  background:#141b34;
+  border-radius:12px;
+  padding:15px;
+}
+.box span{
+  display:block;
+  font-size:24px;
+  font-weight:bold;
+  margin-top:8px;
+  color:#00e5ff;
+}
+#history{
+  margin-top:20px;
+  word-wrap:break-word;
+  max-width:700px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.signal{
+  margin-top:20px;
+  padding:15px;
+  border-radius:12px;
+  background:#141b34;
+  max-width:400px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.buy{color:#00ff99;}
+.sell{color:#ff5252;}
+</style>
+</head>
+<body>
+
+<h1>Deriv Digit Flow Live</h1>
+
+<div id="price">Connecting...</div>
+
+<div class="digits" id="digits"></div>
+
+<div id="history"><b>Last Digits:</b> -</div>
+
+<div class="signal">
+  <h3>Live Signal</h3>
+  <div id="signalText">Waiting for data...</div>
+</div>
+
+<script>
+const app_id = 1089; // Deriv demo app id
+const symbol = 'R_100';
+
+const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${app_id}`);
+
+let historyDigits = [];
+let counts = Array(10).fill(0);
+
+function renderCounts(){
+  const wrap = document.getElementById('digits');
+  wrap.innerHTML = '';
+  counts.forEach((c,i)=>{
+    wrap.innerHTML += `
+      <div class="box">
+        Digit ${i}
+        <span>${c}</span>
+      </div>`;
+  });
+}
+
+function updateSignal(){
+  let odd = counts[1]+counts[3]+counts[5]+counts[7]+counts[9];
+  let even = counts[0]+counts[2]+counts[4]+counts[6]+counts[8];
+
+  let text = '';
+
+  if(odd > even){
+    text = '<span class="buy">ODD DOMINATING</span>';
+  }else if(even > odd){
+    text = '<span class="sell">EVEN DOMINATING</span>';
+  }else{
+    text = 'No clear signal';
+  }
+
+  let maxDigit = counts.indexOf(Math.max(...counts));
+  text += `<br/>Most frequent digit: <b>${maxDigit}</b>`;
+
+  document.getElementById('signalText').innerHTML = text;
+}
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    ticks: symbol,
+    subscribe: 1
+  }));
+};
+
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+
+  if(data.tick){
+    const quote = data.tick.quote.toString();
+
+    document.getElementById('price').innerText = quote;
+
+    const digit = parseInt(quote.slice(-1));
+
+    historyDigits.unshift(digit);
+    if(historyDigits.length > 50) historyDigits.pop();
+
+    counts = Array(10).fill(0);
+    historyDigits.forEach(d => counts[d]++);
+
+    document.getElementById('history').innerHTML =
+      '<b>Last Digits:</b> ' + historyDigits.join(' , ');
+
+    renderCounts();
+    updateSignal();
+  }
+};
+
+ws.onerror = () => {
+  document.getElementById('price').innerText = 'Connection error';
+};
+
+renderCounts();
+</script>
+
+</body>
+</html>
