@@ -101,9 +101,8 @@
     <div id="signalText">Waiting for data...</div>
   </div>
 
-<script>
-// ===== Digit Flow Live Tick Tool =====
 
+<script>
 let historyDigits = [];
 let counts = Array(10).fill(0);
 
@@ -120,94 +119,59 @@ function drawDigits() {
   });
 }
 
-function updateSignal() {
-  const odd = counts[1]+counts[3]+counts[5]+counts[7]+counts[9];
-  const even = counts[0]+counts[2]+counts[4]+counts[6]+counts[8];
+// Connect directly to Deriv live stream
+const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
 
-  let html = '';
+ws.onopen = () => {
+  document.getElementById('price').innerText = 'Connected';
+  document.getElementById('status').innerText = 'Streaming live ticks from Deriv';
 
-  if (odd > even) {
-    html += '<span class="buy">ODD DOMINATING</span>';
-  } else if (even > odd) {
-    html += '<span class="sell">EVEN DOMINATING</span>';
-  } else {
-    html += 'No clear signal';
+  // Subscribe to live Volatility 10 Index ticks
+  ws.send(JSON.stringify({
+    ticks: 'R_10',
+    subscribe: 1
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  // Live tick received from Deriv
+  if (data.tick) {
+
+    const quote = data.tick.quote.toString();
+
+    // Show live price
+    document.getElementById('price').innerText = quote;
+
+    // Extract last digit
+    const digit = parseInt(quote.slice(-1));
+
+    // Save last 50 digits
+    historyDigits.unshift(digit);
+    if (historyDigits.length > 50) historyDigits.pop();
+
+    // Count digits
+    counts = Array(10).fill(0);
+    historyDigits.forEach(d => counts[d]++);
+
+    drawDigits();
+
+    // Show digit history
+    document.getElementById('history').innerHTML =
+      '<b>Last digits:</b> ' + historyDigits.join(' , ');
   }
+};
 
-  const maxDigit = counts.indexOf(Math.max(...counts));
-  html += '<br>Most frequent digit: <b>' + maxDigit + '</b>';
+ws.onerror = () => {
+  document.getElementById('status').innerText = 'Connection error';
+};
 
-  document.getElementById('signalText').innerHTML = html;
-}
+ws.onclose = () => {
+  document.getElementById('status').innerText = 'Disconnected from Deriv';
+};
 
-function connect() {
-
-  document.getElementById('price').innerText = 'Connecting...';
-  document.getElementById('status').innerText = 'Connecting to Deriv server...';
-
-  const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
-
-  ws.onopen = () => {
-
-    document.getElementById('price').innerText = 'Connected';
-    document.getElementById('status').innerText = 'Subscribed to Volatility 10 Index';
-
-    ws.send(JSON.stringify({
-      ticks: 'R_10',
-      subscribe: 1
-    }));
-  };
-
-  ws.onmessage = (event) => {
-
-    const data = JSON.parse(event.data);
-
-    if (data.tick) {
-
-      const quote = data.tick.quote.toString();
-
-      // Show live price
-      document.getElementById('price').innerText = quote;
-
-      // Extract last digit
-      const digit = parseInt(quote.slice(-1));
-
-      // Save latest digits
-      historyDigits.unshift(digit);
-
-      if (historyDigits.length > 50) {
-        historyDigits.pop();
-      }
-
-      // Recount digits
-      counts = Array(10).fill(0);
-      historyDigits.forEach(d => counts[d]++);
-
-      drawDigits();
-      updateSignal();
-
-      document.getElementById('history').innerHTML =
-        '<b>Last digits:</b> ' + historyDigits.join(' , ');
-    }
-  };
-
-  ws.onerror = () => {
-    document.getElementById('price').innerText = 'Connection error';
-    document.getElementById('status').innerText = 'Unable to connect';
-  };
-
-  ws.onclose = () => {
-    document.getElementById('price').innerText = 'Reconnecting...';
-    document.getElementById('status').innerText = 'Connection lost. Retrying in 3 seconds...';
-
-    setTimeout(connect, 3000);
-  };
-}
-
-// Initial draw
 drawDigits();
-connect();
 </script>
-
 </body>
 </html>
