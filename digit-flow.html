@@ -1,112 +1,212 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Digit-flow</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digit-flow Live</title>
+
   <style>
     body{
-      background:#0b1020;
+      background:#020827;
       color:white;
-      font-family:Arial;
+      font-family:Arial,sans-serif;
       text-align:center;
+      margin:0;
       padding:20px;
     }
-    h1{color:#00e5ff;}
+
+    h1{
+      color:#00d9ff;
+      font-size:42px;
+      margin-top:20px;
+    }
+
     #price{
-      font-size:30px;
+      font-size:54px;
       color:#00ff99;
       margin:20px 0;
+      font-weight:bold;
+      min-height:64px;
     }
+
     .grid{
       display:grid;
       grid-template-columns:repeat(5,1fr);
-      gap:10px;
-      max-width:500px;
-      margin:auto;
+      gap:14px;
+      max-width:650px;
+      margin:20px auto;
     }
+
     .box{
-      background:#1a2342;
-      padding:15px;
-      border-radius:10px;
+      background:#16214a;
+      border-radius:18px;
+      padding:20px 10px;
+      box-shadow:0 4px 12px rgba(0,0,0,.35);
     }
+
     .box b{
       display:block;
-      font-size:22px;
-      color:#00e5ff;
-      margin-top:5px;
+      font-size:32px;
+      color:#00d9ff;
+      margin-top:8px;
     }
+
     #history{
-      margin-top:20px;
+      margin-top:26px;
+      max-width:800px;
+      margin-left:auto;
+      margin-right:auto;
       word-break:break-word;
+      font-size:18px;
+      line-height:1.6;
     }
+
+    #status{
+      margin-top:12px;
+      color:#9fb3ff;
+      font-size:16px;
+    }
+
+    .signal{
+      margin:24px auto 0;
+      max-width:420px;
+      background:#10193d;
+      border-radius:18px;
+      padding:18px;
+      border:1px solid #24336e;
+    }
+
+    .signal h3{
+      margin:0 0 10px 0;
+      color:#ffffff;
+    }
+
+    .buy{ color:#00ff99; font-weight:bold; }
+    .sell{ color:#ff6b6b; font-weight:bold; }
   </style>
 </head>
 <body>
 
-<h1>Digit-flow Live</h1>
-<div id="price">Connecting...</div>
+  <h1>Digit-flow Live</h1>
 
-<div class="grid" id="digits"></div>
+  <div id="price">Connecting...</div>
+  <div id="status">Opening Deriv live stream...</div>
 
-<div id="history">Waiting for ticks...</div>
+  <div class="grid" id="digits"></div>
+
+  <div id="history"><b>Last digits:</b> Waiting for ticks...</div>
+
+  <div class="signal">
+    <h3>Live Signal</h3>
+    <div id="signalText">Waiting for data...</div>
+  </div>
 
 <script>
+// ===== Digit Flow Live Tick Tool =====
+
 let historyDigits = [];
 let counts = Array(10).fill(0);
 
-function draw() {
-  const d = document.getElementById('digits');
-  d.innerHTML = '';
+function drawDigits() {
+  const wrap = document.getElementById('digits');
+  wrap.innerHTML = '';
 
-  counts.forEach((c, i) => {
-    d.innerHTML += `
+  counts.forEach((count, digit) => {
+    wrap.innerHTML += `
       <div class="box">
-        Digit ${i}
-        <b>${c}</b>
+        Digit ${digit}
+        <b>${count}</b>
       </div>`;
   });
 }
 
-const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+function updateSignal() {
+  const odd = counts[1]+counts[3]+counts[5]+counts[7]+counts[9];
+  const even = counts[0]+counts[2]+counts[4]+counts[6]+counts[8];
 
-ws.onopen = function () {
-  ws.send(JSON.stringify({
-    ticks: 'R_10',
-    subscribe: 1
-  }));
-};
+  let html = '';
 
-ws.onmessage = function (msg) {
-  const data = JSON.parse(msg.data);
-
-  if (data.tick) {
-    const quote = data.tick.quote.toString();
-
-    // Show live price
-    document.getElementById('price').innerText = quote;
-
-    // Last digit
-    const digit = parseInt(quote.slice(-1));
-
-    historyDigits.unshift(digit);
-    if (historyDigits.length > 50) historyDigits.pop();
-
-    counts = Array(10).fill(0);
-    historyDigits.forEach(d => counts[d]++);
-
-    draw();
-
-    document.getElementById('history').innerHTML =
-      '<b>Last digits:</b> ' + historyDigits.join(' , ');
+  if (odd > even) {
+    html += '<span class="buy">ODD DOMINATING</span>';
+  } else if (even > odd) {
+    html += '<span class="sell">EVEN DOMINATING</span>';
+  } else {
+    html += 'No clear signal';
   }
-};
 
-ws.onerror = function () {
-  document.getElementById('price').innerText = 'Connection error';
-};
+  const maxDigit = counts.indexOf(Math.max(...counts));
+  html += '<br>Most frequent digit: <b>' + maxDigit + '</b>';
 
-draw();
+  document.getElementById('signalText').innerHTML = html;
+}
+
+function connect() {
+
+  document.getElementById('price').innerText = 'Connecting...';
+  document.getElementById('status').innerText = 'Connecting to Deriv server...';
+
+  const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+
+  ws.onopen = () => {
+
+    document.getElementById('price').innerText = 'Connected';
+    document.getElementById('status').innerText = 'Subscribed to Volatility 10 Index';
+
+    ws.send(JSON.stringify({
+      ticks: 'R_10',
+      subscribe: 1
+    }));
+  };
+
+  ws.onmessage = (event) => {
+
+    const data = JSON.parse(event.data);
+
+    if (data.tick) {
+
+      const quote = data.tick.quote.toString();
+
+      // Show live price
+      document.getElementById('price').innerText = quote;
+
+      // Extract last digit
+      const digit = parseInt(quote.slice(-1));
+
+      // Save latest digits
+      historyDigits.unshift(digit);
+
+      if (historyDigits.length > 50) {
+        historyDigits.pop();
+      }
+
+      // Recount digits
+      counts = Array(10).fill(0);
+      historyDigits.forEach(d => counts[d]++);
+
+      drawDigits();
+      updateSignal();
+
+      document.getElementById('history').innerHTML =
+        '<b>Last digits:</b> ' + historyDigits.join(' , ');
+    }
+  };
+
+  ws.onerror = () => {
+    document.getElementById('price').innerText = 'Connection error';
+    document.getElementById('status').innerText = 'Unable to connect';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('price').innerText = 'Reconnecting...';
+    document.getElementById('status').innerText = 'Connection lost. Retrying in 3 seconds...';
+
+    setTimeout(connect, 3000);
+  };
+}
+
+// Initial draw
+drawDigits();
+connect();
 </script>
 
 </body>
