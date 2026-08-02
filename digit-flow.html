@@ -55,10 +55,11 @@
 let historyDigits = [];
 let counts = Array(10).fill(0);
 
-function draw(){
+function draw() {
   const d = document.getElementById('digits');
   d.innerHTML = '';
-  counts.forEach((c,i)=>{
+
+  counts.forEach((c, i) => {
     d.innerHTML += `
       <div class="box">
         Digit ${i}
@@ -67,59 +68,45 @@ function draw(){
   });
 }
 
-function connectWS() {
-  document.getElementById('price').innerText = 'Connecting...';
+const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
 
-  const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+ws.onopen = function () {
+  ws.send(JSON.stringify({
+    ticks: 'R_10',
+    subscribe: 1
+  }));
+};
 
-  ws.onopen = () => {
-    document.getElementById('price').innerText = 'Connected';
+ws.onmessage = function (msg) {
+  const data = JSON.parse(msg.data);
 
-    ws.send(JSON.stringify({
-      ticks: 'R_10',
-      subscribe: 1
-    }));
-  };
+  if (data.tick) {
+    const quote = data.tick.quote.toString();
 
-  ws.onmessage = (msg) => {
-    const data = JSON.parse(msg.data);
+    // Show live price
+    document.getElementById('price').innerText = quote;
 
-    if (data.tick) {
-      const quote = data.tick.quote.toString();
+    // Last digit
+    const digit = parseInt(quote.slice(-1));
 
-      // show live price
-      document.getElementById('price').innerText = quote;
+    historyDigits.unshift(digit);
+    if (historyDigits.length > 50) historyDigits.pop();
 
-      // get last digit
-      const digit = parseInt(quote.slice(-1));
+    counts = Array(10).fill(0);
+    historyDigits.forEach(d => counts[d]++);
 
-      // store latest 50 digits
-      historyDigits.unshift(digit);
-      if (historyDigits.length > 50) historyDigits.pop();
+    draw();
 
-      // recount digits
-      counts = Array(10).fill(0);
-      historyDigits.forEach(x => counts[x]++);
+    document.getElementById('history').innerHTML =
+      '<b>Last digits:</b> ' + historyDigits.join(' , ');
+  }
+};
 
-      draw();
-
-      document.getElementById('history').innerHTML =
-        '<b>Last digits:</b> ' + historyDigits.join(' , ');
-    }
-  };
-
-  ws.onerror = () => {
-    document.getElementById('price').innerText = 'Connection error';
-  };
-
-  ws.onclose = () => {
-    document.getElementById('price').innerText = 'Reconnecting...';
-    setTimeout(connectWS, 3000); // reconnect after 3 sec
-  };
-}
+ws.onerror = function () {
+  document.getElementById('price').innerText = 'Connection error';
+};
 
 draw();
-connectWS();
 </script>
 
 </body>
